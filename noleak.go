@@ -55,10 +55,10 @@ func (a *Allocator) Free(buf []byte) {
 	a.x[i].Lock()
 
 	// debug
-	if _, ok := a.m[i][uptr]; ok {
-		atomic.AddUint64(&a.nf, 1)
-		delete(a.m[i], uptr)
-	}
+	// if _, ok := a.m[i][uptr]; ok {
+	atomic.AddUint64(&a.nf, 1)
+	delete(a.m[i], uptr)
+	// }
 
 	a.x[i].Unlock()
 
