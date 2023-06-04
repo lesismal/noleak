@@ -19,6 +19,8 @@ type Allocator struct {
 	nm uint64
 	// n free
 	nf uint64
+	// n gc free
+	ngf uint64
 }
 
 func (a *Allocator) Malloc(size int) []byte {
@@ -39,7 +41,7 @@ func (a *Allocator) Malloc(size int) []byte {
 
 			delete(a.m[i], key)
 			// debug
-			atomic.AddUint64(&a.nf, 1)
+			atomic.AddUint64(&a.ngf, 1)
 		}
 		a.x[i].Unlock()
 	})
@@ -51,19 +53,20 @@ func (a *Allocator) Free(buf []byte) {
 
 	i := hash(uptr)
 	a.x[i].Lock()
-	delete(a.m[i], uptr)
 
 	// debug
 	if _, ok := a.m[i][uptr]; ok {
 		atomic.AddUint64(&a.nf, 1)
+		delete(a.m[i], uptr)
 	}
+
 	a.x[i].Unlock()
 
 	// c_free()
 }
 
-func (a *Allocator) Info() {
-
+func (a *Allocator) Info() (uint64, uint64, uint64) {
+	return a.nm, a.nf, a.ngf
 }
 
 func New() *Allocator {
