@@ -20,9 +20,7 @@ func main() {
 		go func(idx int) {
 			for j := 0; j < N; j++ {
 				pbuf0 := allocator.Malloc(size)
-				// allocator.Malloc(size)
 				pbuf := allocator.Realloc(pbuf0, size*2)
-				// log.Println("===", uintptr(unsafe.Pointer(&((*pbuf0)[0]))), uintptr(unsafe.Pointer(&((*pbuf)[0]))))
 				buffers[idx][j] = pbuf
 				if j%2 == 1 {
 					allocator.Free(pbuf)
@@ -40,7 +38,7 @@ func main() {
 		}(i)
 	}
 
-	for i := 1; i <= 50; i++ {
+	for i := 1; i <= 5; i++ {
 		time.Sleep(time.Second * 1)
 		nm, nr, nf, ngf := allocator.Info()
 		fmt.Println("-------------------------------\n" +
@@ -52,15 +50,5 @@ func main() {
 			fmt.Sprintf("to free: %v\n", nm-nf-ngf))
 
 		runtime.GC()
-
-		// if nm-nf-ngf == 0 {
-		// 	for i := 0; i < N; i++ {
-		// 		for j := 0; j < N; j++ {
-		// 			for k := 0; k < j+1; k++ {
-		// 				buffers[i][j][k] = byte(k)
-		// 			}
-		// 		}
-		// 	}
-		// }
 	}
 }
