@@ -24,6 +24,7 @@ func GLIBC_Malloc(size int) []byte {
 		cap:   size,
 	}
 	*((*_slice)(unsafe.Pointer(ptr))) = slice
+	// log.Println("malloc :", &buf[0])
 	return buf
 }
 
@@ -33,10 +34,12 @@ func GLIBC_Realloc(buf []byte, size int) []byte {
 	pslice.array = unsafe.Pointer(pbuf)
 	pslice.len = size
 	pslice.cap = size
+	// log.Println("realloc:", &buf[0])
 	return buf
 }
 
 func GLIBC_Free(buf []byte) {
+	// log.Println("free   :", &buf[0])
 	slice := _slice{}
 	pslice := &slice
 	*pslice = *((*_slice)(unsafe.Pointer(&buf)))

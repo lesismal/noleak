@@ -18,6 +18,9 @@ type Allocator struct {
 	// map buckets
 	m []map[uintptr]uint64
 
+	// seq
+	seq uint64
+
 	// malloc times
 	nm uint64
 	// realloc times
@@ -53,61 +56,70 @@ func New(maxThreadNum uint64) *Allocator {
 func (a *Allocator) Malloc(size int) *[]byte {
 	buf := a.malloc(size)
 	pbuf := &buf
-	a.mark(pbuf)
-	return pbuf
-}
-
-func (a *Allocator) mark(pbuf *[]byte) {
+	// a.mark(pbuf)
 	uptr := uintptr(unsafe.Pointer(&((*pbuf)[0])))
 
 	// add new buffer to map and set finalizer
 	i := a.hash(uptr)
-	nm := atomic.AddUint64(&a.nm, 1)
+	atomic.AddUint64(&a.nm, 1)
+	seq := atomic.AddUint64(&a.seq, 1)
 	a.x[i].Lock()
 	defer a.x[i].Unlock()
-	a.m[i][uptr] = nm
+	a.m[i][uptr] = seq
 	// runtime.KeepAlive(&buf)
 	runtime.SetFinalizer(pbuf, func(p *[]byte) {
 		key := uintptr(unsafe.Pointer(&(*p)[0]))
 		a.x[i].Lock()
 		defer a.x[i].Unlock()
-		if a.m[i][key] == nm {
+		if a.m[i][key] == seq {
 			delete(a.m[i], key)
 			a.free(*p)
 			atomic.AddUint64(&a.ngf, 1)
 		}
 	})
+	return pbuf
 }
 
-func (a *Allocator) unmark(pbuf *[]byte) {
-	uptr := uintptr(unsafe.Pointer(&((*pbuf)[0])))
-	i := a.hash(uptr)
-	a.x[i].Lock()
-	defer a.x[i].Unlock()
-	delete(a.m[i], uptr)
-
-	runtime.SetFinalizer(pbuf, nil)
-}
-
-func (a *Allocator) Realloc(buf []byte, size int) *[]byte {
-	if size <= cap(buf) {
-		buf = buf[:size]
-		return &buf
+func (a *Allocator) Realloc(pbuf *[]byte, size int) *[]byte {
+	if size <= cap(*pbuf) {
+		*pbuf = (*pbuf)[:size]
+		return pbuf
 	}
-	oldPtr := uintptr(unsafe.Pointer(&buf[0]))
+	oldPtr := uintptr(unsafe.Pointer(&(*pbuf)[0]))
 	i := a.hash(oldPtr)
 	a.x[i].Lock()
-	newBuf := a.realloc(buf, size)
-	a.x[i].Unlock()
+	defer a.x[i].Unlock()
 
+	runtime.SetFinalizer(pbuf, nil)
+	delete(a.m[i], oldPtr)
+
+	newBuf := a.realloc(*pbuf, size)
 	newPtr := uintptr(unsafe.Pointer(&newBuf[0]))
+	pNewbuf := &newBuf
+
+	seq := atomic.AddUint64(&a.seq, 1)
+	j := a.hash(newPtr)
+	if j != i {
+		a.x[j].Lock()
+		defer a.x[j].Unlock()
+	}
+	a.m[j][newPtr] = seq
+	runtime.SetFinalizer(pNewbuf, func(p *[]byte) {
+		key := uintptr(unsafe.Pointer(&(*p)[0]))
+		a.x[j].Lock()
+		defer a.x[j].Unlock()
+		if a.m[j][key] == seq {
+			delete(a.m[j], key)
+			a.free(*p)
+			atomic.AddUint64(&a.ngf, 1)
+		}
+	})
+
 	if newPtr != oldPtr {
-		a.unmark(&buf)
-		a.mark(&newBuf)
 		atomic.AddUint64(&a.nr, 1)
 	}
 
-	return &newBuf
+	return pNewbuf
 }
 
 func (a *Allocator) Append(buf []byte, more ...byte) *[]byte {
@@ -116,13 +128,13 @@ func (a *Allocator) Append(buf []byte, more ...byte) *[]byte {
 
 func (a *Allocator) AppendString(buf []byte, more string) *[]byte {
 	lbuf, lmore := len(buf), len(more)
-	pbuf := a.Realloc(buf, lbuf+lmore)
-	copy((*pbuf)[lbuf:], more)
+	pbuf := a.Realloc(&buf, lbuf+lmore)
+	copy(buf[lbuf:], more)
 	return pbuf
 }
 
-func (a *Allocator) Free(buf []byte) {
-	uptr := uintptr(unsafe.Pointer(&buf[0]))
+func (a *Allocator) Free(pbuf *[]byte) {
+	uptr := uintptr(unsafe.Pointer(&((*pbuf)[0])))
 
 	i := a.hash(uptr)
 	a.x[i].Lock()
@@ -131,8 +143,8 @@ func (a *Allocator) Free(buf []byte) {
 	if _, ok := a.m[i][uptr]; ok {
 		atomic.AddUint64(&a.nf, 1)
 		delete(a.m[i], uptr)
-		runtime.SetFinalizer(&buf, nil)
-		a.free(buf)
+		runtime.SetFinalizer(pbuf, nil)
+		a.free(*pbuf)
 	}
 }
 
