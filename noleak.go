@@ -9,6 +9,8 @@ import (
 
 const defaultAllocatiroThreadNumLimit uint64 = 1
 
+var DefaultAllocator = New(1)
+
 type Allocator struct {
 	// bucketNum
 	nb uint64
@@ -122,14 +124,14 @@ func (a *Allocator) Realloc(pbuf *[]byte, size int) *[]byte {
 	return pNewbuf
 }
 
-func (a *Allocator) Append(buf []byte, more ...byte) *[]byte {
-	return a.AppendString(buf, *(*string)(unsafe.Pointer(&more)))
+func (a *Allocator) Append(pbuf *[]byte, more ...byte) *[]byte {
+	return a.AppendString(pbuf, *(*string)(unsafe.Pointer(&more)))
 }
 
-func (a *Allocator) AppendString(buf []byte, more string) *[]byte {
-	lbuf, lmore := len(buf), len(more)
-	pbuf := a.Realloc(&buf, lbuf+lmore)
-	copy(buf[lbuf:], more)
+func (a *Allocator) AppendString(pbuf *[]byte, more string) *[]byte {
+	lbuf, lmore := len(*pbuf), len(more)
+	pbuf = a.Realloc(pbuf, lbuf+lmore)
+	copy((*pbuf)[lbuf:], more)
 	return pbuf
 }
 
@@ -155,4 +157,28 @@ func (a *Allocator) hash(p uintptr) uint64 {
 
 func (a *Allocator) Info() (uint64, uint64, uint64, uint64) {
 	return a.nm, a.nr, a.nf, a.ngf
+}
+
+func Malloc(size int) *[]byte {
+	return DefaultAllocator.Malloc(size)
+}
+
+func Realloc(pbuf *[]byte, size int) *[]byte {
+	return DefaultAllocator.Realloc(pbuf, size)
+}
+
+func Append(pbuf *[]byte, more ...byte) *[]byte {
+	return DefaultAllocator.AppendString(pbuf, *(*string)(unsafe.Pointer(&more)))
+}
+
+func AppendString(pbuf *[]byte, more string) *[]byte {
+	return DefaultAllocator.AppendString(pbuf, more)
+}
+
+func Free(pbuf *[]byte) {
+	DefaultAllocator.Free(pbuf)
+}
+
+func Info() (uint64, uint64, uint64, uint64) {
+	return DefaultAllocator.Info()
 }
