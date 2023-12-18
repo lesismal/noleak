@@ -6,19 +6,22 @@ import (
 )
 
 const (
-	bufSize    = 1024
-	allocTimes = 1000
+	bufSize     = 1024
+	concurrency = 100
+	allocTimes  = 1000
 )
 
 func poolGetPutTask(pool *sync.Pool) {
 	ch := make(chan *[]byte, allocTimes)
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < concurrency; i++ {
 		go func(n int) {
-			p := pool.Get().(*[]byte)
-			ch <- p
+			for j := 0; j < allocTimes; j++ {
+				p := pool.Get().(*[]byte)
+				ch <- p
+			}
 		}(i)
 	}
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < allocTimes*concurrency; i++ {
 		p := <-ch
 		pool.Put(p)
 	}
@@ -26,15 +29,17 @@ func poolGetPutTask(pool *sync.Pool) {
 
 func poolAppendTask(pool *sync.Pool) {
 	ch := make(chan *[]byte, allocTimes)
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < concurrency; i++ {
 		go func(n int) {
-			p := pool.Get().(*[]byte)
-			*p = (*p)[:bufSize]
-			*p = append(*p, make([]byte, bufSize)...)
-			ch <- p
+			for j := 0; j < allocTimes; j++ {
+				p := pool.Get().(*[]byte)
+				*p = (*p)[:bufSize]
+				*p = append(*p, make([]byte, bufSize)...)
+				ch <- p
+			}
 		}(i)
 	}
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < allocTimes*concurrency; i++ {
 		p := <-ch
 		pool.Put(p)
 	}
@@ -42,13 +47,15 @@ func poolAppendTask(pool *sync.Pool) {
 
 func mallocTask() {
 	ch := make(chan *[]byte, allocTimes)
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < concurrency; i++ {
 		go func(n int) {
-			p := Malloc(bufSize)
-			ch <- p
+			for j := 0; j < allocTimes; j++ {
+				p := Malloc(bufSize)
+				ch <- p
+			}
 		}(i)
 	}
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < allocTimes*concurrency; i++ {
 		p := <-ch
 		Free(p)
 	}
@@ -56,14 +63,16 @@ func mallocTask() {
 
 func reallocTask() {
 	ch := make(chan *[]byte, allocTimes)
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < concurrency; i++ {
 		go func(n int) {
-			p := Malloc(bufSize)
-			p = Realloc(p, bufSize)
-			ch <- p
+			for j := 0; j < allocTimes; j++ {
+				p := Malloc(bufSize)
+				p = Realloc(p, bufSize)
+				ch <- p
+			}
 		}(i)
 	}
-	for i := 0; i < allocTimes; i++ {
+	for i := 0; i < allocTimes*concurrency; i++ {
 		p := <-ch
 		Free(p)
 	}
@@ -112,3 +121,4 @@ func Benchmark_GLIBC_ReallocFree(b *testing.B) {
 		reallocTask()
 	}
 }
+
