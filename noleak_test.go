@@ -12,7 +12,7 @@ const (
 )
 
 func poolGetPutTask(pool *sync.Pool) {
-	ch := make(chan *[]byte, allocTimes)
+	ch := make(chan *[]byte, allocTimes*concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func(n int) {
 			for j := 0; j < allocTimes; j++ {
@@ -28,7 +28,7 @@ func poolGetPutTask(pool *sync.Pool) {
 }
 
 func poolAppendTask(pool *sync.Pool) {
-	ch := make(chan *[]byte, allocTimes)
+	ch := make(chan *[]byte, allocTimes*concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func(n int) {
 			for j := 0; j < allocTimes; j++ {
@@ -46,35 +46,35 @@ func poolAppendTask(pool *sync.Pool) {
 }
 
 func mallocTask() {
-	ch := make(chan *[]byte, allocTimes)
+	ch := make(chan []byte, allocTimes*concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func(n int) {
 			for j := 0; j < allocTimes; j++ {
-				p := Malloc(bufSize)
+				p := GLIBC_Malloc(bufSize)
 				ch <- p
 			}
 		}(i)
 	}
 	for i := 0; i < allocTimes*concurrency; i++ {
 		p := <-ch
-		Free(p)
+		GLIBC_Free(p)
 	}
 }
 
 func reallocTask() {
-	ch := make(chan *[]byte, allocTimes)
+	ch := make(chan []byte, allocTimes*concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func(n int) {
 			for j := 0; j < allocTimes; j++ {
-				p := Malloc(bufSize)
-				p = Realloc(p, bufSize)
+				p := GLIBC_Malloc(bufSize)
+				p = GLIBC_Realloc(p, bufSize)
 				ch <- p
 			}
 		}(i)
 	}
 	for i := 0; i < allocTimes*concurrency; i++ {
 		p := <-ch
-		Free(p)
+		GLIBC_Free(p)
 	}
 }
 
